@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saree Try-On — Admin Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="admin-page">
+  <!-- Header -->
+  <div class="admin-header">
+    <div class="brand-mark">✦</div>
+    <h1>Back Office</h1>
+  </div>
+
+  <div class="admin-container">
+    <!-- Session Management Card -->
+    <div class="admin-section">
+      <h2>Session Management</h2>
+      <div class="session-controls" style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px;">
+        <button id="btn-new-session" class="btn btn-primary">Start New Session</button>
+        <button id="btn-end-session" class="btn btn-secondary" disabled>End Session</button>
+      </div>
+      <span id="session-info" class="status-pill">No active session</span>
+    </div>
+
+    <!-- Upload Saree Card -->
+    <div class="admin-section">
+      <h2>Upload Saree</h2>
+      <form id="upload-form" class="upload-form">
+        <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+          <label for="saree-name" style="font-family: 'Inter', sans-serif; font-size: 12px; color: var(--umber); font-weight: 500;">Saree Name</label>
+          <input type="text" id="saree-name" placeholder="e.g., Royal Blue Banarasi" required>
+        </div>
+        <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+          <label for="saree-code" style="font-family: 'Inter', sans-serif; font-size: 12px; color: var(--umber); font-weight: 500;">Saree Code</label>
+          <input type="text" id="saree-code" placeholder="e.g., RBB-001" required>
+        </div>
+        <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+          <label for="saree-image-type" style="font-family: 'Inter', sans-serif; font-size: 12px; color: var(--umber); font-weight: 500;">Image Type</label>
+          <select id="saree-image-type" style="padding: 8px; border: 1px solid var(--ink-soft, #ccc); border-radius: 6px;">
+            <option value="fabric">Fabric / flat-lay (saree alone)</option>
+            <option value="model">Model wearing the saree</option>
+          </select>
+        </div>
+        <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+          <label for="saree-image" style="font-family: 'Inter', sans-serif; font-size: 12px; color: var(--umber); font-weight: 500;">Saree Image File</label>
+          <input type="file" id="saree-image" accept="image/*">
+          <div style="text-align: center; margin: 8px 0; font-size: 0.75rem; color: var(--umber-soft);">— OR —</div>
+          <button type="button" id="btn-saree-camera" class="btn btn-secondary" style="width: 100%;">📷 Capture from Camera</button>
+          
+          <div id="admin-saree-webcam-container" style="display: none;" class="webcam-saree-wrapper">
+            <video id="admin-saree-webcam" autoplay playsinline class="webcam-saree-video"></video>
+            <div class="webcam-saree-actions">
+              <button type="button" id="btn-admin-saree-capture" class="btn btn-primary">Capture</button>
+              <button type="button" id="btn-admin-saree-recapture" class="btn btn-secondary" style="display: none;">Retake</button>
+            </div>
+          </div>
+          <canvas id="admin-saree-canvas" style="display: none;"></canvas>
+        </div>
+        <button type="submit" class="btn btn-primary" id="btn-submit-upload" style="margin-top: 12px; width: 100%;">Upload Saree</button>
+      </form>
+    </div>
+
+    <!-- Saree Catalog Card -->
+    <div class="admin-section">
+      <h2>Catalog (<span id="saree-count">0</span> sarees)</h2>
+      <table id="saree-table" class="saree-table" style="display: none;">
+        <thead>
+          <tr>
+            <th>Image</th>
+            <th>Name</th>
+            <th>Code</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Dynamic saree items here -->
+        </tbody>
+      </table>
+      <div id="saree-empty" class="empty-state">
+        <div class="empty-icon">🥻</div>
+        No sarees uploaded yet
+      </div>
+    </div>
+  </div>
+
+  <div id="notification" class="notification"></div>
+
+  <!-- STAFF LOGIN OVERLAY -->
+  <div id="admin-login-overlay" style="display: none; position: fixed; inset: 0; background: rgba(28, 20, 16, 0.55); z-index: 200; align-items: center; justify-content: center;">
+    <div style="background: var(--card, #fff); padding: 28px; border-radius: 12px; max-width: 340px; width: 90%; text-align: center; box-shadow: 0 12px 32px rgba(0,0,0,0.2);">
+      <h3 style="margin-bottom: 8px;">Staff Sign In</h3>
+      <p style="font-size: 13px; color: var(--umber-soft, #777); margin-bottom: 16px;">Enter the staff PIN to access the back office.</p>
+      <input type="password" id="admin-login-pin" inputmode="numeric" placeholder="PIN"
+             style="width: 100%; padding: 10px 12px; font-size: 16px; text-align: center; letter-spacing: 4px; border: 1px solid var(--ink-soft, #ccc); border-radius: 8px; margin-bottom: 12px;">
+      <div id="admin-login-error" style="color: #c0392b; font-size: 12px; min-height: 16px; margin-bottom: 8px;"></div>
+      <button id="admin-login-submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ── DOM References ──
+      const btnNewSession  = document.getElementById('btn-new-session');
+      const btnEndSession  = document.getElementById('btn-end-session');
+      const sessionInfo    = document.getElementById('session-info');
+      const uploadForm     = document.getElementById('upload-form');
+      const sareeNameInput = document.getElementById('saree-name');
+      const sareeCodeInput = document.getElementById('saree-code');
+      const sareeImageInput = document.getElementById('saree-image');
+      const btnSubmitUpload = document.getElementById('btn-submit-upload');
+      const sareeTable     = document.getElementById('saree-table');
+      const sareeTbody    = sareeTable.querySelector('tbody');
+      const sareeEmpty    = document.getElementById('saree-empty');
+      const sareeCount    = document.getElementById('saree-count');
+      const notificationEl = document.getElementById('notification');
+
+      // Saree camera DOM
+      const btnSareeCamera = document.getElementById('btn-saree-camera');
+      const adminSareeWebcamContainer = document.getElementById('admin-saree-webcam-container');
+      const adminSareeWebcam = document.getElementById('admin-saree-webcam');
+      const btnAdminSareeCapture = document.getElementById('btn-admin-saree-capture');
+      const btnAdminSareeRecapture = document.getElementById('btn-admin-saree-recapture');
+      const adminSareeCanvas = document.getElementById('admin-saree-canvas');
+
+      let currentSessionId = null;
+      let notificationTimer = null;
+      let sareeCameraStream = null;
+      let sareeCameraBlob = null;
+
+      // ── Notification Helper ──
+      function showNotification(msg, type) {
+        type = type || 'info';
+        notificationEl.textContent = msg;
+        notificationEl.className = 'notification ' + type;
+
+        void notificationEl.offsetWidth;
+        notificationEl.classList.add('show');
+
+        if (notificationTimer) clearTimeout(notificationTimer);
+        notificationTimer = setTimeout(function () {
+          notificationEl.classList.remove('show');
+        }, 3000);
+      }
+
+      // ── Saree Camera Controls ──
+      function startSareeCamera() {
+        adminSareeWebcamContainer.style.display = 'block';
+        btnAdminSareeCapture.style.display = 'inline-flex';
+        btnAdminSareeRecapture.style.display = 'none';
+        sareeCameraBlob = null;
+
+        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'environment' } })
+          .then(stream => {
+            sareeCameraStream = stream;
+            adminSareeWebcam.srcObject = stream;
+          })
+          .catch(err => {
+            console.error('Camera access denied:', err);
+            showNotification('Could not access saree camera', 'error');
+            stopSareeCamera();
+          });
+      }
+
+      function stopSareeCamera() {
+        if (sareeCameraStream) {
+          sareeCameraStream.getTracks().forEach(track => track.stop());
+          sareeCameraStream = null;
+        }
+        adminSareeWebcam.srcObject = null;
+        adminSareeWebcamContainer.style.display = 'none';
+      }
+
+      btnSareeCamera.addEventListener('click', function() {
+        if (sareeCameraStream) {
+          stopSareeCamera();
+          btnSareeCamera.textContent = '📷 Capture from Camera';
+        } else {
+          startSareeCamera();
+          btnSareeCamera.textContent = 'Cancel Saree Camera';
+        }
+      });
+
+      btnAdminSareeCapture.addEventListener('click', function() {
+        if (!sareeCameraStream) return;
+
+        adminSareeCanvas.width = adminSareeWebcam.videoWidth || 640;
+        adminSareeCanvas.height = adminSareeWebcam.videoHeight || 480;
+        const ctx = adminSareeCanvas.getContext('2d');
+        ctx.drawImage(adminSareeWebcam, 0, 0, adminSareeCanvas.width, adminSareeCanvas.height);
+
+        adminSareeCanvas.toBlob(blob => {
+          sareeCameraBlob = blob;
+          btnAdminSareeCapture.style.display = 'none';
+          btnAdminSareeRecapture.style.display = 'inline-flex';
+          adminSareeWebcam.pause();
+        }, 'image/jpeg', 0.95);
+      });
+
+      btnAdminSareeRecapture.addEventListener('click', function() {
+        sareeCameraBlob = null;
+        btnAdminSareeCapture.style.display = 'inline-flex';
+        btnAdminSareeRecapture.style.display = 'none';
+        adminSareeWebcam.play();
+      });
+
+      // ── Load Sarees ──
+      function loadSarees() {
+        fetch('/kiosk/sarees')
+          .then(function (res) {
+            if (!res.ok) throw new Error('Failed to fetch sarees');
+            return res.json();
+          })
+          .then(function (sarees) {
+            sareeCount.textContent = sarees.length;
+
+            if (!sarees.length) {
+              sareeTable.style.display = 'none';
+              sareeEmpty.style.display = 'block';
+              return;
+            }
+
+            sareeTable.style.display = 'table';
+            sareeEmpty.style.display = 'none';
+
+            let rows = '';
+            sarees.forEach(function (s) {
+              rows += `
+                <tr class="saree-row fade-in">
+                  <td><img src="${escapeHtml(s.image_url || '/static/placeholder.png')}" alt="${escapeHtml(s.name)}" class="saree-thumb"></td>
+                  <td>${escapeHtml(s.name)}</td>
+                  <td>${escapeHtml(s.code)}</td>
+                  <td><button class="saree-delete btn btn-secondary" data-id="${s.id}" title="Delete saree">✕</button></td>
+                </tr>`;
+            });
+            sareeTbody.innerHTML = rows;
+
+            // Attach delete handlers
+            sareeTbody.querySelectorAll('.saree-delete').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                var id = this.getAttribute('data-id');
+                deleteSaree(id);
+              });
+            });
+          })
+          .catch(function (err) {
+            console.error('Error loading sarees:', err);
+            sareeTable.style.display = 'none';
+            sareeEmpty.style.display = 'block';
+            sareeEmpty.innerHTML = '<div class="empty-state">Failed to load catalog</div>';
+          });
+      }
+
+      // ── Delete Saree ──
+      function deleteSaree(id) {
+        if (!confirm('Delete this saree from the catalog?')) return;
+
+        fetch('/admin/delete-saree/' + id, { method: 'DELETE' })
+          .then(function (res) {
+            if (!res.ok) throw new Error('Delete failed');
+            return res.json();
+          })
+          .then(function () {
+            showNotification('Saree deleted', 'success');
+            loadSarees();
+          })
+          .catch(function (err) {
+            console.error('Error deleting saree:', err);
+            showNotification('Failed to delete saree', 'error');
+          });
+      }
+
+      // ── Upload Saree ──
+      uploadForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        var name  = sareeNameInput.value.trim();
+        var code  = sareeCodeInput.value.trim();
+        
+        var fileSelected = sareeImageInput.files[0];
+        var cameraCaptured = sareeCameraBlob;
+
+        if (!name || !code) {
+          showNotification('Please fill in name and code', 'error');
+          return;
+        }
+
+        if (!fileSelected && !cameraCaptured) {
+          showNotification('Please choose an image file or capture a photo', 'error');
+          return;
+        }
+
+        var formData = new FormData();
+        formData.append('name', name);
+        formData.append('code', code);
+        formData.append('image_type', document.getElementById('saree-image-type').value);
+
+        if (fileSelected) {
+          formData.append('image', fileSelected);
+        } else if (cameraCaptured) {
+          formData.append('image', cameraCaptured, 'saree_capture.jpg');
+        }
+
+        btnSubmitUpload.disabled = true;
+        btnSubmitUpload.textContent = 'Uploading...';
+
+        fetch('/admin/upload-saree', {
+          method: 'POST',
+          body: formData
+        })
+          .then(function (res) {
+            if (!res.ok) throw new Error('Upload failed');
+            return res.json();
+          })
+          .then(function (data) {
+            showNotification('Saree uploaded successfully!', 'success');
+            uploadForm.reset();
+            stopSareeCamera();
+            btnSareeCamera.textContent = '📷 Capture from Camera';
+            loadSarees();
+          })
+          .catch(function (err) {
+            console.error('Error uploading saree:', err);
+            showNotification('Failed to upload saree', 'error');
+          })
+          .finally(function () {
+            btnSubmitUpload.disabled = false;
+            btnSubmitUpload.textContent = 'Upload Saree';
+          });
+      });
+
+      // ── Session: Start New ──
+      btnNewSession.addEventListener('click', function () {
+        btnNewSession.disabled = true;
+        btnNewSession.textContent = 'Starting...';
+
+        fetch('/admin/new-session', { method: 'POST' })
+          .then(function (res) {
+            if (!res.ok) throw new Error('Failed to start session');
+            return res.json();
+          })
+          .then(function (data) {
+            currentSessionId = data.session_id;
+            sessionInfo.textContent = 'Session: ' + data.session_id;
+            sessionInfo.className = 'session-badge active';
+            btnEndSession.disabled = false;
+            showNotification('New session started', 'success');
+          })
+          .catch(function (err) {
+            console.error('Error starting session:', err);
+            showNotification('Failed to start session', 'error');
+          })
+          .finally(function () {
+            btnNewSession.disabled = false;
+            btnNewSession.textContent = 'Start New Session';
+          });
+      });
+
+      // ── Session: End ──
+      btnEndSession.addEventListener('click', function () {
+        if (!confirm('End the current session?')) return;
+
+        btnEndSession.disabled = true;
+        btnEndSession.textContent = 'Ending...';
+
+        fetch('/admin/end-session', { method: 'POST' })
+          .then(function (res) {
+            if (!res.ok) throw new Error('Failed to end session');
+            return res.json();
+          })
+          .then(function () {
+            currentSessionId = null;
+            sessionInfo.textContent = 'Session ended';
+            sessionInfo.className = 'session-badge ended';
+            btnEndSession.disabled = true;
+            showNotification('Session ended', 'info');
+          })
+          .catch(function (err) {
+            console.error('Error ending session:', err);
+            showNotification('Failed to end session', 'error');
+            btnEndSession.disabled = false;
+          })
+          .finally(function () {
+            btnEndSession.textContent = 'End Session';
+          });
+      });
+
+      // Check current session status
+      function fetchCurrentSession() {
+        fetch('/kiosk/active-session')
+          .then(res => res.json())
+          .then(data => {
+            if (data.active) {
+              currentSessionId = data.id;
+              sessionInfo.textContent = 'Session: ' + data.id;
+              sessionInfo.className = 'session-badge active';
+              btnEndSession.disabled = false;
+            } else {
+              currentSessionId = null;
+              sessionInfo.textContent = 'No active session';
+              sessionInfo.className = 'session-badge ended';
+              btnEndSession.disabled = true;
+            }
+          })
+          .catch(err => console.error("Error fetching session:", err));
+      }
+
+      // ── Escape HTML Helper ──
+      function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+      }
+
+      // ── Staff Login Gate ──
+      const loginOverlay = document.getElementById('admin-login-overlay');
+      const loginPin = document.getElementById('admin-login-pin');
+      const loginError = document.getElementById('admin-login-error');
+      const loginSubmit = document.getElementById('admin-login-submit');
+
+      function initAdmin() {
+        loadSarees();
+        fetchCurrentSession();
+      }
+
+      function attemptLogin() {
+        fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: loginPin.value })
+        })
+          .then(res => {
+            if (!res.ok) throw new Error('Invalid PIN');
+            return res.json();
+          })
+          .then(() => {
+            loginOverlay.style.display = 'none';
+            loginPin.value = '';
+            loginError.textContent = '';
+            initAdmin();
+          })
+          .catch(() => {
+            loginError.textContent = 'Invalid PIN. Please try again.';
+            loginPin.value = '';
+            loginPin.focus();
+          });
+      }
+
+      loginSubmit.addEventListener('click', attemptLogin);
+      loginPin.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') attemptLogin();
+      });
+
+      // ── Init: require staff auth before loading the back office ──
+      fetch('/admin/auth-status')
+        .then(res => res.json())
+        .then(data => {
+          if (data.authenticated) {
+            initAdmin();
+          } else {
+            loginOverlay.style.display = 'flex';
+            loginPin.focus();
+          }
+        })
+        .catch(() => {
+          loginOverlay.style.display = 'flex';
+        });
+    })();
+  </script>
+</body>
+</html>

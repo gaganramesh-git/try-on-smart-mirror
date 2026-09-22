@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saree Try-On — Customer Kiosk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body class="kiosk-page">
+
+  <!-- TOP BAR -->
+  <header id="topbar">
+    <div class="brand">
+      <span class="brand-mark">✦</span>
+      <span class="brand-name">Saree Virtual Try-On</span>
+    </div>
+    <div class="topbar-actions">
+      <span id="session-status" class="status-pill">Checking session...</span>
+      <button id="btn-photo" class="btn btn-secondary" style="display: none;">📷 Change Photo</button>
+      <span id="cart-count" class="status-pill">Cart: 0 / 20</span>
+      <button id="btn-staff-toggle" class="btn-staff-toggle" title="Staff Mode">⚙️</button>
+    </div>
+  </header>
+
+  <!-- WIZARD STEPS -->
+  <div class="wizard-steps" id="wizard-steps">
+    <div class="wizard-step active" id="step-setup-tab">
+      <div class="wizard-step-circle">1</div>
+      <div class="wizard-step-label">Capture Photo</div>
+    </div>
+    <div class="wizard-step" id="step-catalog-tab">
+      <div class="wizard-step-circle">2</div>
+      <div class="wizard-step-label">Browse Catalog</div>
+    </div>
+    <div class="wizard-step" id="step-summary-tab">
+      <div class="wizard-step-circle">3</div>
+      <div class="wizard-step-label">Summary & QR</div>
+    </div>
+  </div>
+
+  <!-- MAIN VIEW CONTAINERS -->
+  <div class="main-container">
+
+    <!-- STEP 1: SETUP SECTION -->
+    <div id="view-setup" class="photo-section" style="display: none;">
+      <div class="photo-modal">
+        <div class="empty-icon" style="font-size: 3rem; margin-bottom: 16px;">📷</div>
+        <h2>Customer Setup</h2>
+        <p>Please stand in front of the camera and capture a full-body photo of yourself, or upload an image to start the virtual try-on.</p>
+        
+        <!-- Webcam Preview with Silhouette Overlay -->
+        <div id="kiosk-webcam-wrapper" class="webcam-saree-wrapper" style="display: none;">
+          <video id="kiosk-webcam" autoplay playsinline></video>
+          <div class="camera-silhouette-guide">
+            <svg viewBox="0 0 100 100">
+              <path d="M 50 14 C 54.5 14, 57.5 18, 57.5 22.5 C 57.5 27, 54.5 31, 50 31 C 45.5 31, 42.5 27, 42.5 22.5 C 42.5 18, 45.5 14, 50 14 Z 
+                       M 50 31 C 42.5 34, 38 41, 38 49 L 39.5 64 L 41 85 L 59 85 L 60.5 64 L 62 49 C 62 41, 57.5 34, 50 31 Z" />
+            </svg>
+          </div>
+        </div>
+
+        <!-- Captured Photo Preview -->
+        <div id="kiosk-preview-wrapper" style="display: none; margin-bottom: 16px;">
+          <img id="kiosk-preview" src="" alt="Captured Preview" style="max-height: 280px; width: auto; border-radius: var(--radius-sm); border: 1px solid var(--ink-soft); margin: 0 auto; display: block;">
+        </div>
+
+        <!-- Drag-and-Drop File Upload -->
+        <div class="photo-upload-area" id="kiosk-upload-area">
+          <div class="upload-icon">📁</div>
+          <p>Drag & drop image file here, or click to browse</p>
+          <input type="file" id="kiosk-file-upload" accept="image/*">
+        </div>
+
+        <!-- Action Controls -->
+        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 16px; flex-wrap: wrap;">
+          <button id="btn-kiosk-camera-toggle" class="btn btn-secondary">📷 Use Camera</button>
+          <button id="btn-kiosk-capture" class="btn btn-primary" style="display: none;">📸 Capture Photo</button>
+          <button id="btn-kiosk-retake" class="btn btn-secondary" style="display: none;">🔄 Retake</button>
+          <button id="btn-kiosk-save" class="btn btn-primary" style="display: none;">✓ Use This Photo</button>
+          <button id="btn-kiosk-cancel" class="btn btn-secondary" style="display: none;">✕ Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: CATALOG SECTION -->
+    <div id="view-catalog" style="display: none;">
+      <!-- Customer Photo Info Bar -->
+      <div id="customer-photo-bar" class="customer-photo-bar" style="margin-top: 10px;">
+        <img id="customer-photo-img" src="" alt="Customer Photo">
+        <span>Photo loaded. Tap any saree below to drape it onto your model!</span>
+      </div>
+
+      <!-- Catalog Header -->
+      <div class="catalog-header">
+        <h1>Boutique Catalog</h1>
+        <div class="catalog-sub">Select a saree to virtually drape it onto your model</div>
+      </div>
+
+      <!-- Drape (pleat) style selector — applied to each saree added -->
+      <div class="pleat-style-bar" style="display: flex; align-items: center; gap: 10px; margin: 4px 0 2px; flex-wrap: wrap;">
+        <span style="font-size: 13px; font-weight: 600; color: var(--umber, #6b5b4d);">Drape style</span>
+        <div id="pleat-style-toggle" style="display: inline-flex; border: 1px solid var(--ink-soft, #ccc); border-radius: 999px; overflow: hidden;">
+          <button type="button" class="pleat-opt active" data-pleat="single"
+            style="border: none; background: transparent; padding: 6px 16px; font-size: 13px; cursor: pointer;">Single pleat</button>
+          <button type="button" class="pleat-opt" data-pleat="double"
+            style="border: none; background: transparent; padding: 6px 16px; font-size: 13px; cursor: pointer;">Double pleat</button>
+        </div>
+      </div>
+
+      <!-- Category Filter Tabs -->
+      <div class="catalog-filters" id="catalog-filters">
+        <div class="filter-tab active" data-filter="all">All sarees</div>
+        <div class="filter-tab" data-filter="silk">Silk</div>
+        <div class="filter-tab" data-filter="banarasi">Banarasi</div>
+        <div class="filter-tab" data-filter="kanjeevaram">Kanjeevaram</div>
+        <div class="filter-tab" data-filter="georgette">Georgette</div>
+      </div>
+
+      <!-- Catalog Grid -->
+      <div id="catalog" class="catalog-grid" style="padding-top: 10px;">
+        <!-- Saree cards dynamically injected here -->
+      </div>
+
+      <!-- Compare Button Row -->
+      <div id="compare-btn-row" style="display: none; justify-content: center; padding: 8px 0;">
+        <button id="btn-compare" class="btn btn-primary" style="gap: 8px;">
+          <span>⚖️</span> Compare Styles
+        </button>
+      </div>
+
+      <!-- Bottom Try-On Cart Strip -->
+      <div class="cart-strip" id="cart-strip">
+        <div id="cart-empty-msg" class="cart-empty">Add sarees to your cart to begin virtual try-on</div>
+        <!-- Cart thumbnails dynamically injected here -->
+      </div>
+    </div>
+
+    <!-- STEP 3: SUMMARY & QR SECTION -->
+    <div id="view-summary" class="summary-qr-screen" style="display: none; padding-top: 20px;">
+      <div class="summary-qr-card" style="background: var(--card); border: 1px solid var(--gold); border-radius: var(--radius-md); padding: 32px; text-align: center; max-width: 480px; margin: 0 auto; box-shadow: 0 8px 24px rgba(28, 20, 16, 0.08);">
+        <div class="empty-icon" style="font-size: 3rem; margin-bottom: 16px; color: var(--gold);">✦</div>
+        <h2 style="font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 600; color: var(--ink); margin-bottom: 8px;">Your Virtual Showroom Portfolio</h2>
+        <p style="font-family: 'Inter', sans-serif; font-size: 13px; color: var(--umber-soft); margin-bottom: 24px;">Scan this QR code with your phone to view and download all your virtual try-on drapes!</p>
+        
+        <div class="summary-qr-holder" style="background: #FFF; padding: 16px; display: inline-block; border-radius: 4px; border: 1px solid var(--ink-soft); margin-bottom: 24px;">
+          <img id="summary-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://localhost:5001/display" alt="Session QR Code" style="display: block;">
+        </div>
+        
+        <div class="summary-buttons" style="display: flex; gap: 12px; justify-content: center;">
+          <button id="btn-summary-restart" class="btn btn-primary">Restart Session</button>
+          <button id="btn-summary-back" class="btn btn-secondary">Back to Catalog</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- NO ACTIVE SESSION OVERLAY -->
+  <div id="no-session-overlay" class="photo-section" style="display: flex; z-index: 120;">
+    <div class="photo-modal">
+      <div class="empty-icon" style="font-size: 3rem; margin-bottom: 16px;">🥻</div>
+      <h2>Welcome to Saree Try-On</h2>
+      <p>Please wait for the store staff to start a new customer session.</p>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="notification" class="notification"></div>
+
+  <!-- STAFF DRAWER BACKDROP -->
+  <div id="staff-backdrop" class="staff-backdrop"></div>
+
+  <!-- STAFF DRAWER PANEL -->
+  <div id="staff-drawer" class="staff-drawer">
+    <div class="staff-drawer-header">
+      <h2>⚙️ Staff Mode Control</h2>
+      <button id="btn-staff-close" class="staff-drawer-close">×</button>
+    </div>
+    <div class="staff-drawer-body">
+      <!-- Session Management -->
+      <div class="staff-section">
+        <h3>Session Controller</h3>
+        <div class="staff-session-btns">
+          <button id="btn-staff-start" class="btn btn-primary">Start New Session</button>
+          <button id="btn-staff-end" class="btn btn-secondary">End Session</button>
+        </div>
+      </div>
+
+      <!-- Add Saree to Catalog -->
+      <div class="staff-section">
+        <h3>Upload New Saree</h3>
+        <form id="staff-upload-form" class="staff-upload-form">
+          <div class="form-group">
+            <label for="saree-name">Saree Name</label>
+            <input type="text" id="saree-name" placeholder="e.g., Crimson Silk Saree" required>
+          </div>
+          <div class="form-group">
+            <label for="saree-code">Saree Code</label>
+            <input type="text" id="saree-code" placeholder="e.g., CR-SILK-01" required>
+          </div>
+          <div class="form-group">
+            <label for="staff-saree-image-type">Image Type</label>
+            <select id="staff-saree-image-type" style="width: 100%; padding: 8px;">
+              <option value="fabric">Fabric / flat-lay (saree alone)</option>
+              <option value="model">Model wearing the saree</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="saree-image">Saree Image File</label>
+            <input type="file" id="saree-image" accept="image/*">
+            <div style="text-align: center; margin: 8px 0; font-size: 0.75rem; color: var(--text-muted);">— OR —</div>
+            <button type="button" id="btn-staff-saree-camera" class="btn btn-secondary" style="width: 100%;">📷 Capture from Camera</button>
+            <div id="staff-saree-webcam-container" style="display: none;" class="webcam-saree-wrapper">
+              <video id="staff-saree-webcam" autoplay playsinline class="webcam-saree-video"></video>
+              <div class="webcam-saree-actions">
+                <button type="button" id="btn-staff-saree-capture" class="btn btn-primary">Capture</button>
+                <button type="button" id="btn-staff-saree-recapture" class="btn btn-secondary" style="display: none;">Retake</button>
+              </div>
+            </div>
+            <canvas id="staff-saree-canvas" style="display: none;"></canvas>
+          </div>
+          <button type="submit" id="btn-saree-upload" class="btn btn-primary">Upload Saree</button>
+        </form>
+      </div>
+
+      <!-- Saree Catalog Management -->
+      <div class="staff-section">
+        <h3>Catalog Management</h3>
+        <div id="staff-catalog-list" class="staff-catalog-list">
+          <!-- Dynamic staff catalog items here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECURITY PIN OVERLAY -->
+  <div id="pin-modal-overlay" class="pin-modal-overlay" style="display: none;">
+    <div class="pin-modal">
+      <h3>Enter Staff PIN</h3>
+      <p>Enter the 4-digit security PIN to access the Staff Control Portal.</p>
+      <div class="pin-input-row">
+        <input type="password" maxlength="1" class="pin-digit" data-idx="0" pattern="[0-9]*" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit" data-idx="1" pattern="[0-9]*" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit" data-idx="2" pattern="[0-9]*" inputmode="numeric">
+        <input type="password" maxlength="1" class="pin-digit" data-idx="3" pattern="[0-9]*" inputmode="numeric">
+      </div>
+      <div id="pin-error" class="pin-error"></div>
+      <div class="pin-modal-actions">
+        <button id="btn-pin-submit" class="btn btn-primary">Submit</button>
+        <button id="btn-pin-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE COMPARISON DRAWER -->
+  <div class="compare-drawer-backdrop" id="compare-backdrop"></div>
+  <div class="compare-drawer" id="compare-drawer">
+    <div class="compare-header">
+      <h2>Compare Drapes</h2>
+      <button class="compare-close-btn" id="btn-compare-close">×</button>
+    </div>
+    <div class="compare-grid">
+      <div class="compare-column">
+        <select id="compare-select-1" class="compare-select-dropdown"></select>
+        <img id="compare-img-1" src="/static/placeholder.png" alt="Compare 1">
+      </div>
+      <div class="compare-column">
+        <select id="compare-select-2" class="compare-select-dropdown"></select>
+        <img id="compare-img-2" src="/static/placeholder.png" alt="Compare 2">
+      </div>
+    </div>
+  </div>
+
+  <!-- TRY-ON LIGHTBOX MODAL -->
+  <div id="lightbox-modal" class="lightbox-modal" style="display: none;">
+    <div class="lightbox-backdrop" id="lightbox-backdrop"></div>
+    <div class="lightbox-content">
+      <button class="lightbox-close-btn" id="btn-lightbox-close">×</button>
+      <div class="lightbox-image-wrapper">
+        <img id="lightbox-img" src="" alt="Try-On Result">
+      </div>
+      <div class="lightbox-caption" id="lightbox-caption">Saree Name</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ── Escape HTML Helper ──
+      function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+      }
+
+      // ── SocketIO & State ──
+      const socket = window.io ? io() : { on: function () {}, emit: function () {} };
+      let activeSession = null;
+      let sarees = [];
+      let cart = [];
+      let selectedCartItemId = null;
+      let currentPleatStyle = 'single';  // drape style applied to each saree added
+      let webcamStream = null;
+      let capturedBlob = null;
+      let notificationTimer = null;
+      let pollingIntervals = {};
+      let staffAuthenticated = false;
+      let currentFilter = 'all';
+
+      // Staff Saree camera variables
+      let staffSareeStream = null;
+      let staffSareeBlob = null;
+
+      // ── DOM References ──
+      const noSessionOverlay = document.getElementById('no-session-overlay');
+      const sessionBadge = document.getElementById('session-status');
+      const btnPhoto = document.getElementById('btn-photo');
+      const cartCounter = document.getElementById('cart-count');
+      const catalogEl = document.getElementById('catalog');
+      const cartStripEl = document.getElementById('cart-strip');
+      const cartEmptyMsg = document.getElementById('cart-empty-msg');
+      const notificationEl = document.getElementById('notification');
+
+      // Views
+      const viewSetup = document.getElementById('view-setup');
+      const viewCatalog = document.getElementById('view-catalog');
+      const viewSummary = document.getElementById('view-summary');
+
+      // Step Tabs
+      const stepSetupTab = document.getElementById('step-setup-tab');
+      const stepCatalogTab = document.getElementById('step-catalog-tab');
+      const stepSummaryTab = document.getElementById('step-summary-tab');
+
+      // Setup view DOM components
+      const kioskWebcamWrapper = document.getElementById('kiosk-webcam-wrapper');
+      const kioskWebcamVideo = document.getElementById('kiosk-webcam');
+      const kioskPreviewWrapper = document.getElementById('kiosk-preview-wrapper');
+      const kioskPreviewImg = document.getElementById('kiosk-preview');
+      const kioskUploadArea = document.getElementById('kiosk-upload-area');
+      const kioskFileUploadInput = document.getElementById('kiosk-file-upload');
+      const btnKioskCameraToggle = document.getElementById('btn-kiosk-camera-toggle');
+      const btnKioskCapture = document.getElementById('btn-kiosk-capture');
+      const btnKioskRetake = document.getElementById('btn-kiosk-retake');
+      const btnKioskSave = document.getElementById('btn-kiosk-save');
+      const btnKioskCancel = document.getElementById('btn-kiosk-cancel');
+
+      // Customer Photo Bar inside Step 2
+      const customerPhotoBar = document.getElementById('customer-photo-bar');
+      const customerPhotoImg = document.getElementById('customer-photo-img');
+
+      // Category filters
+      const filterTabs = document.querySelectorAll('.filter-tab');
+
+      // Compare Drawer DOM components
+      const compareBtnRow = document.getElementById('compare-btn-row');
+      const btnCompare = document.getElementById('btn-compare');
+      const compareBackdrop = document.getElementById('compare-backdrop');
+      const compareDrawer = document.getElementById('compare-drawer');
+      const btnCompareClose = document.getElementById('btn-compare-close');
+      const compareSelect1 = document.getElementById('compare-select-1');
+      const compareSelect2 = document.getElementById('compare-select-2');
+      const compareImg1 = document.getElementById('compare-img-1');
+      const compareImg2 = document.getElementById('compare-img-2');
+
+      // Summary View
+      const summaryQrImg = document.getElementById('summary-qr-img');
+      const btnSummaryRestart = document.getElementById('btn-summary-restart');
+      const btnSummaryBack = document.getElementById('btn-summary-back');
+
+      // ── Notification Toast ──
+      function showNotification(msg, type) {
+        type = type || 'info';
+        notificationEl.textContent = msg;
+        notificationEl.className = 'notification ' + type;
+        void notificationEl.offsetWidth; // force reflow
+        notificationEl.classList.add('show');
+
+        if (notificationTimer) clearTimeout(notificationTimer);
+        notificationTimer = setTimeout(function () {
+          notificationEl.classList.remove('show');
+        }, 3000);
+      }
+
+      // ── Step Navigation Controller ──
+      function switchStep(stepName) {
+        if (!activeSession) {
+          showNotification('Please start a store session first.', 'error');
+          return;
+        }
+
+        // Hide all views
+        viewSetup.style.display = 'none';
+        viewCatalog.style.display = 'none';
+        viewSummary.style.display = 'none';
+
+        // Reset tab classes
+        stepSetupTab.classList.remove('active');
+        stepCatalogTab.classList.remove('active');
+        stepSummaryTab.classList.remove('active');
+
+        if (stepName === 'setup') {
+          stepSetupTab.classList.add('active');
+          viewSetup.style.display = 'block';
+          resetPhotoModalState();
+        } else if (stepName === 'catalog') {
+          if (!activeSession.customer_photo) {
+            showNotification('Please upload or capture a photo first.', 'warning');
+            switchStep('setup');
+            return;
+          }
+          stepCatalogTab.classList.add('active');
+          viewCatalog.style.display = 'block';
+          loadCatalog();
+          loadCart();
+        } else if (stepName === 'summary') {
+          if (!activeSession.customer_photo) {
+            showNotification('Please capture a photo first.', 'warning');
+            switchStep('setup');
+            return;
+          }
+          stepSummaryTab.classList.add('active');
+          viewSummary.style.display = 'block';
+          generateSummaryQR();
+        }
+      }
+
+      // Hook tab click events (if session is active)
+      stepSetupTab.addEventListener('click', () => switchStep('setup'));
+      stepCatalogTab.addEventListener('click', () => switchStep('catalog'));
+      stepSummaryTab.addEventListener('click', () => switchStep('summary'));
+
+      // ── Fetch Session Info ──
+      function checkActiveSession() {
+        return fetch('/kiosk/active-session')
+          .then(res => res.json())
+          .then(data => {
+            if (data.active) {
+              activeSession = data;
+              noSessionOverlay.style.display = 'none';
+              sessionBadge.textContent = 'Session Active';
+              sessionBadge.className = 'status-pill active';
+              btnPhoto.style.display = 'inline-flex';
+              
+              if (data.customer_photo) {
+                customerPhotoImg.src = data.photo_url + '?t=' + Date.now();
+                customerPhotoBar.style.display = 'flex';
+                switchStep('catalog');
+              } else {
+                customerPhotoBar.style.display = 'none';
+                switchStep('setup');
+              }
+              return true;
+            } else {
+              activeSession = null;
+              noSessionOverlay.style.display = 'flex';
+              sessionBadge.textContent = 'No Active Session';
+              sessionBadge.className = 'status-pill ended';
+              btnPhoto.style.display = 'none';
+              viewSetup.style.display = 'none';
+              viewCatalog.style.display = 'none';
+              viewSummary.style.display = 'none';
+              clearCartUI();
+              return false;
+            }
+          })
+          .catch(err => {
+            console.error('Error fetching session:', err);
+            showNotification('Error checking session status', 'error');
+            return false;
+          });
+      }
+
+      // ── Load Catalog ──
+      function loadCatalog() {
+        fetch('/kiosk/sarees')
+          .then(res => res.json())
+          .then(data => {
+            sarees = data;
+            renderCatalog();
+          })
+          .catch(err => {
+            console.error('Error loading sarees:', err);
+            showNotification('Failed to load saree catalog', 'error');
+          });
+      }
+
+      // Helper to assign categories dynamically based on names/codes
+      function getSareeCategory(s) {
+        const name = s.name.toLowerCase();
+        const code = s.code.toLowerCase();
+        if (name.includes('silk') || code.includes('silk') || code.includes('slk')) {
+          if (name.includes('banarasi') || code.includes('ban')) return 'banarasi';
+          if (name.includes('kanjeevaram') || code.includes('kan')) return 'kanjeevaram';
+          return 'silk';
+        }
+        if (name.includes('banarasi') || code.includes('ban')) return 'banarasi';
+        if (name.includes('kanjeevaram') || code.includes('kan')) return 'kanjeevaram';
+        if (name.includes('georgette') || code.includes('geo')) return 'georgette';
+        return 'other';
+      }
+
+      // Category filters click handler
+      filterTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+          filterTabs.forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          currentFilter = this.getAttribute('data-filter');
+          renderCatalog();
+        });
+      });
+
+      // ── Load Cart ──
+      function loadCart() {
+        if (!activeSession) return;
+        fetch('/kiosk/cart')
+          .then(res => res.json())
+          .then(data => {
+            cart = data;
+            renderCart();
+            updateCatalogCartBadges();
+            updateCompareButtonVisibility();
+          })
+          .catch(err => {
+            console.error('Error loading cart:', err);
+          });
+      }
+
+      // ── Render Catalog ──
+      function renderCatalog() {
+        const filtered = sarees.filter(s => {
+          if (currentFilter === 'all') return true;
+          return getSareeCategory(s) === currentFilter;
+        });
+
+        if (!filtered.length) {
+          catalogEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🥻</div>No sarees found in this category</div>';
+          return;
+        }
+
+        let html = '';
+        filtered.forEach(s => {
+          html += `
+            <div class="saree-card fade-in" id="card-${s.id}" data-id="${s.id}">
+              <div class="saree-card-img-wrapper">
+                <img class="saree-card-img" src="${escapeHtml(s.image_url || '/static/placeholder.png')}" alt="${escapeHtml(s.name)}">
+              </div>
+              <div class="label">
+                <div class="saree-card-name">${escapeHtml(s.name)}</div>
+                <div class="saree-card-code">${escapeHtml(s.code)}</div>
+              </div>
+            </div>
+          `;
+        });
+        catalogEl.innerHTML = html;
+
+        // Add card click events
+        catalogEl.querySelectorAll('.saree-card').forEach(card => {
+          card.addEventListener('click', function () {
+            const sareeId = parseInt(this.getAttribute('data-id'));
+            handleSareeClick(sareeId);
+          });
+        });
+        updateCatalogCartBadges();
+      }
+
+      // ── Render Cart Strip ──
+      function renderCart() {
+        cartCounter.textContent = `Cart: ${cart.length} / 20`;
+        
+        // Remove completed intervals for items no longer in cart
+        const cartItemIds = cart.map(item => item.id);
+        Object.keys(pollingIntervals).forEach(id => {
+          if (!cartItemIds.includes(parseInt(id))) {
+            clearInterval(pollingIntervals[id]);
+            delete pollingIntervals[id];
+          }
+        });
+
+        if (!cart.length) {
+          cartEmptyMsg.style.display = 'block';
+          // Clean up thumbnails
+          const thumbs = cartStripEl.querySelectorAll('.cart-thumb-wrapper');
+          thumbs.forEach(t => t.remove());
+          return;
+        }
+
+        cartEmptyMsg.style.display = 'none';
+
+        // Render thumbs in order, updating or adding
+        cart.forEach(item => {
+          let thumbWrapper = document.getElementById(`thumb-wrapper-${item.id}`);
+          let statusClass = '';
+          if (item.status === 'pending' || item.status === 'processing') {
+            statusClass = 'pending';
+            startPolling(item.id);
+          } else if (item.status === 'done') {
+            statusClass = 'done';
+            stopPolling(item.id);
+          } else if (item.status === 'error') {
+            statusClass = 'error';
+            stopPolling(item.id);
+          }
+
+          let wrapperClass = 'cart-thumb-wrapper';
+          if (selectedCartItemId === item.id) {
+            wrapperClass += ' selected';
+          }
+
+          const imageSrc = (item.status === 'done' && item.result_url) 
+            ? item.result_url 
+            : `/static/sarees/${item.saree_filename}`;
+
+          if (thumbWrapper) {
+            thumbWrapper.className = wrapperClass;
+            const img = thumbWrapper.querySelector('.cart-thumb');
+            if (img) img.src = imageSrc + '?t=' + Date.now();
+            const dot = thumbWrapper.querySelector('.cart-status-dot');
+            if (dot) {
+              dot.className = 'cart-status-dot ' + statusClass;
+            }
+          } else {
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.id = `thumb-wrapper-${item.id}`;
+            wrapperDiv.className = wrapperClass;
+            wrapperDiv.setAttribute('data-cart-item-id', item.id);
+
+            wrapperDiv.innerHTML = `
+              <img class="cart-thumb" src="${imageSrc}?t=${Date.now()}" alt="${escapeHtml(item.saree_name)}">
+              <div class="cart-status-dot ${statusClass}"></div>
+            `;
+            
+            wrapperDiv.addEventListener('click', function () {
+              const currentItem = cart.find(i => i.id === item.id);
+              selectCartItem(item.id);
+              if (currentItem && currentItem.status === 'done' && currentItem.result_url) {
+                openLightbox(currentItem.result_url, `${currentItem.saree_name} (${currentItem.saree_code})`);
+              }
+            });
+            
+            cartStripEl.appendChild(wrapperDiv);
+          }
+        });
+
+        // Clean up any thumbs in DOM not in cart array
+        const domThumbs = cartStripEl.querySelectorAll('.cart-thumb-wrapper');
+        domThumbs.forEach(thumb => {
+          const id = parseInt(thumb.getAttribute('data-cart-item-id'));
+          if (!cartItemIds.includes(id)) {
+            thumb.remove();
+          }
+        });
+      }
+
+      function clearCartUI() {
+        cart = [];
+        selectedCartItemId = null;
+        renderCart();
+        updateCatalogCartBadges();
+        updateCompareButtonVisibility();
+      }
+
+      function updateCatalogCartBadges() {
+        const inCartSareeIds = cart.map(item => item.saree_id);
+        sarees.forEach(s => {
+          const card = document.getElementById(`card-${s.id}`);
+          if (card) {
+            let badge = card.querySelector('.cart-badge');
+            if (inCartSareeIds.includes(s.id)) {
+              card.classList.add('in-cart');
+              if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'cart-badge';
+                badge.textContent = 'In Cart';
+                card.appendChild(badge);
+              }
+            } else {
+              card.classList.remove('in-cart');
+              if (badge) badge.remove();
+            }
+          }
+        });
+      }
+
+      // ── Pleat-style toggle: staff pick the drape applied to each add ──
+      function initPleatStyleToggle() {
+        const toggle = document.getElementById('pleat-style-toggle');
+        if (!toggle) return;
+        toggle.querySelectorAll('.pleat-opt').forEach(btn => {
+          btn.addEventListener('click', () => {
+            currentPleatStyle = btn.dataset.pleat;  // 'single' | 'double'
+            toggle.querySelectorAll('.pleat-opt').forEach(b => {
+              const on = b === btn;
+              b.classList.toggle('active', on);
+              b.style.background = on ? 'var(--umber, #6b5b4d)' : 'transparent';
+              b.style.color = on ? '#fff' : 'inherit';
+            });
+          });
+        });
+        // Reflect the default selection on load.
+        const def = toggle.querySelector('.pleat-opt.active');
+        if (def) { def.style.background = 'var(--umber, #6b5b4d)'; def.style.color = '#fff'; }
+      }
+      initPleatStyleToggle();
+
+      // ── Tablet support ──────────────────────────────────────────────
+      // Browsers only allow the in-page camera (getUserMedia) on HTTPS or
+      // localhost. A tablet reaching this kiosk over the shop's wi-fi is on
+      // plain http, so the camera button would fail silently. Hide it there
+      // and lean on the file input, which opens the tablet's own camera app
+      // and uploads the photo over the network exactly the same way.
+      function adaptForRemoteDevice() {
+        if (window.isSecureContext) return;
+        // A stylesheet rule, not an inline style: resetPhotoModalState() re-shows
+        // this button on every step change and would otherwise undo us.
+        const st = document.createElement('style');
+        st.textContent = '#btn-kiosk-camera-toggle,#btn-staff-saree-camera{display:none !important}';
+        document.head.appendChild(st);
+        const prompt = document.querySelector('#kiosk-upload-area p');
+        if (prompt) prompt.textContent = 'Tap here to take a photo, or choose one from this device';
+        const icon = document.querySelector('#kiosk-upload-area .upload-icon');
+        if (icon) icon.textContent = '📷';
+      }
+      adaptForRemoteDevice();
+
+      // ── Handle Catalog Saree Click ──
+      function handleSareeClick(sareeId) {
+        if (!activeSession) {
+          showNotification('No active session. Please start a session first.', 'error');
+          return;
+        }
+        if (!activeSession.customer_photo) {
+          switchStep('setup');
+          return;
+        }
+
+        // Check if already in cart
+        const existing = cart.find(item => item.saree_id === sareeId);
+        if (existing) {
+          const thumb = document.getElementById(`thumb-wrapper-${existing.id}`);
+          if (thumb) {
+            thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            selectCartItem(existing.id);
+          }
+          return;
+        }
+
+        if (cart.length >= 20) {
+          showNotification('Cart is full (max 20 sarees)', 'error');
+          return;
+        }
+
+        // Add to cart
+        fetch('/kiosk/cart/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ saree_id: sareeId, pleat_style: currentPleatStyle })
+        })
+          .then(res => {
+            if (!res.ok) {
+              return res.json().then(data => { throw new Error(data.error || 'Failed to add to cart') });
+            }
+            return res.json();
+          })
+          .then(data => {
+            showNotification(`${data.saree_name} added to cart!`, 'success');
+            const newItem = {
+              id: data.cart_item_id,
+              session_id: activeSession.id,
+              saree_id: data.saree_id,
+              saree_name: data.saree_name,
+              saree_code: data.saree_code,
+              saree_filename: data.saree_filename,
+              status: 'pending',
+              result_url: null
+            };
+            cart.push(newItem);
+            renderCart();
+            updateCatalogCartBadges();
+            updateCompareButtonVisibility();
+            selectCartItem(data.cart_item_id);
+          })
+          .catch(err => {
+            console.error('Error adding to cart:', err);
+            showNotification(err.message, 'error');
+          });
+      }
+
+      // ── Select Cart Item (Trigger Display) ──
+      function selectCartItem(cartItemId) {
+        selectedCartItemId = cartItemId;
+        
+        // Highlight thumb
+        cartStripEl.querySelectorAll('.cart-thumb-wrapper').forEach(t => {
+          const id = parseInt(t.getAttribute('data-cart-item-id'));
+          if (id === cartItemId) {
+            t.classList.add('selected');
+          } else {
+            t.classList.remove('selected');
+          }
+        });
+
+        // Tell server to broadcast this selection to displays
+        fetch('/kiosk/cart/select', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cart_item_id: cartItemId })
+        })
+          .then(res => res.json())
+          .then(data => {
+            console.log('Selection broadcast sent:', data);
+          })
+          .catch(err => {
+            console.error('Error selecting item:', err);
+          });
+      }
+
+      // ── Photo Upload and Camera Management (Kiosk Step 1) ──
+      function resetPhotoModalState() {
+        stopWebcam();
+        kioskWebcamWrapper.style.display = 'none';
+        kioskPreviewWrapper.style.display = 'none';
+        kioskUploadArea.style.display = 'block';
+        btnKioskCameraToggle.textContent = '📷 Use Camera';
+        btnKioskCameraToggle.style.display = 'inline-flex';
+        btnKioskCapture.style.display = 'none';
+        btnKioskRetake.style.display = 'none';
+        btnKioskSave.style.display = 'none';
+        btnKioskCancel.style.display = 'none';
+        capturedBlob = null;
+        kioskFileUploadInput.value = '';
+      }
+
+      function startWebcam() {
+        kioskWebcamWrapper.style.display = 'block';
+        kioskPreviewWrapper.style.display = 'none';
+        kioskUploadArea.style.display = 'none';
+        btnKioskCameraToggle.style.display = 'none';
+        btnKioskCapture.style.display = 'inline-flex';
+        btnKioskRetake.style.display = 'none';
+        btnKioskSave.style.display = 'none';
+        btnKioskCancel.style.display = 'inline-flex';
+        capturedBlob = null;
+
+        navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 640, facingMode: 'user' } })
+          .then(stream => {
+            webcamStream = stream;
+            kioskWebcamVideo.srcObject = stream;
+          })
+          .catch(err => {
+            console.error('Camera access denied:', err);
+            showNotification('Could not access webcam. Please allow camera permissions.', 'error');
+            resetPhotoModalState();
+          });
+      }
+
+      function stopWebcam() {
+        if (webcamStream) {
+          webcamStream.getTracks().forEach(track => track.stop());
+          webcamStream = null;
+        }
+        kioskWebcamVideo.srcObject = null;
+      }
+
+      btnKioskCameraToggle.addEventListener('click', startWebcam);
+      btnKioskCancel.addEventListener('click', resetPhotoModalState);
+
+      // Retake: restart the webcam stream for a new capture
+      btnKioskRetake.addEventListener('click', function () {
+        capturedBlob = null;
+        kioskPreviewWrapper.style.display = 'none';
+        btnKioskRetake.style.display = 'none';
+        btnKioskSave.style.display = 'none';
+        btnKioskCancel.style.display = 'inline-flex';
+        startWebcam();
+      });
+
+      btnKioskCapture.addEventListener('click', function () {
+        if (!webcamStream) {
+          showNotification('Camera not ready. Please wait.', 'error');
+          return;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = kioskWebcamVideo.videoWidth || 480;
+        canvas.height = kioskWebcamVideo.videoHeight || 640;
+        const ctx = canvas.getContext('2d');
+        // Mirror the image (flip horizontally) since it's front-facing
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(kioskWebcamVideo, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob(blob => {
+          if (!blob) {
+            showNotification('Capture failed. Please try again.', 'error');
+            return;
+          }
+          capturedBlob = blob;
+          kioskPreviewImg.src = URL.createObjectURL(blob);
+          kioskPreviewWrapper.style.display = 'block';
+          
+          stopWebcam();
+          kioskWebcamWrapper.style.display = 'none';
+          btnKioskCapture.style.display = 'none';
+          btnKioskCameraToggle.style.display = 'none';
+          // Show retake + use photo options
+          btnKioskRetake.style.display = 'inline-flex';
+          btnKioskSave.style.display = 'inline-flex';
+          btnKioskCancel.style.display = 'none';
+        }, 'image/jpeg', 0.95);
+      });
+
+      // File input handler
+      kioskFileUploadInput.addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        capturedBlob = file;
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          kioskPreviewImg.src = event.target.result;
+          kioskPreviewWrapper.style.display = 'block';
+          kioskUploadArea.style.display = 'none';
+          btnKioskCameraToggle.style.display = 'none';
+          btnKioskCapture.style.display = 'none';
+          btnKioskRetake.style.display = 'none';
+          btnKioskCancel.style.display = 'inline-flex';
+          btnKioskSave.style.display = 'inline-flex';
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // Drag and drop handlers
+      kioskUploadArea.addEventListener('dragover', e => {
+        e.preventDefault();
+        kioskUploadArea.style.borderColor = 'var(--accent-gold-light)';
+        kioskUploadArea.style.background = 'rgba(212, 175, 55, 0.08)';
+      });
+
+      kioskUploadArea.addEventListener('dragleave', () => {
+        kioskUploadArea.style.borderColor = 'var(--accent-gold)';
+        kioskUploadArea.style.background = 'transparent';
+      });
+
+      kioskUploadArea.addEventListener('drop', e => {
+        e.preventDefault();
+        kioskUploadArea.style.borderColor = 'var(--accent-gold)';
+        kioskUploadArea.style.background = 'transparent';
+        
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+          capturedBlob = file;
+          const reader = new FileReader();
+          reader.onload = function (event) {
+            kioskPreviewImg.src = event.target.result;
+            kioskPreviewWrapper.style.display = 'block';
+            kioskUploadArea.style.display = 'none';
+            btnKioskCameraToggle.style.display = 'none';
+            btnKioskCancel.style.display = 'inline-flex';
+            btnKioskSave.style.display = 'inline-flex';
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // Save / Upload Photo
+      btnKioskSave.addEventListener('click', function () {
+        if (!capturedBlob || !activeSession) return;
+
+        btnKioskSave.disabled = true;
+        btnKioskSave.textContent = 'Saving...';
+
+        const formData = new FormData();
+        formData.append('photo', capturedBlob, 'customer.jpg');
+
+        fetch('/kiosk/photo', {
+          method: 'POST',
+          body: formData
+        })
+          .then(res => {
+            if (!res.ok) throw new Error('Upload failed');
+            return res.json();
+          })
+          .then(data => {
+            showNotification('Photo saved successfully!', 'success');
+            checkActiveSession().then(() => {
+              switchStep('catalog');
+            });
+          })
+          .catch(err => {
+            console.error('Error uploading photo:', err);
+            showNotification('Failed to upload photo', 'error');
+          })
+          .finally(() => {
+            btnKioskSave.disabled = false;
+            btnKioskSave.textContent = 'Use Photo';
+          });
+      });
+
+      // Header button redirects back to setup step
+      btnPhoto.addEventListener('click', () => switchStep('setup'));
+
+      // ── Status Polling Fallback ──
+      function startPolling(cartItemId) {
+        if (pollingIntervals[cartItemId]) return;
+        
+        pollingIntervals[cartItemId] = setInterval(() => {
+          fetch(`/result-status/${cartItemId}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.status !== 'pending' && data.status !== 'processing') {
+                stopPolling(cartItemId);
+                
+                const item = cart.find(i => i.id === cartItemId);
+                if (item) {
+                  item.status = data.status;
+                  item.result_url = data.result_url;
+                  renderCart();
+                  updateCompareButtonVisibility();
+                  
+                  if (selectedCartItemId === cartItemId) {
+                    selectCartItem(cartItemId);
+                  }
+                }
+              }
+            })
+            .catch(err => console.error('Polling error:', err));
+        }, 3000);
+      }
+
+      function stopPolling(cartItemId) {
+        if (pollingIntervals[cartItemId]) {
+          clearInterval(pollingIntervals[cartItemId]);
+          delete pollingIntervals[cartItemId];
+        }
+      }
+
+      // ── WebSocket Event Receivers ──
+      socket.on('result_ready', function (data) {
+        console.log('Result ready event received:', data);
+        stopPolling(data.cart_item_id);
+
+        const item = cart.find(i => i.id === data.cart_item_id);
+        if (item) {
+          item.status = data.status;
+          item.result_url = data.result_url;
+          renderCart();
+          updateCompareButtonVisibility();
+          
+          if (selectedCartItemId === data.cart_item_id) {
+            selectCartItem(data.cart_item_id);
+          }
+        }
+      });
+
+      socket.on('session_started', function (data) {
+        console.log('New session started:', data);
+        showNotification('A new session has started!', 'info');
+        checkActiveSession().then(() => {
+          clearCartUI();
+          loadCatalog();
+        });
+      });
+
+      socket.on('session_ended', function (data) {
+        console.log('Session ended:', data);
+        showNotification('The session has ended.', 'info');
+        checkActiveSession();
+      });
+
+      socket.on('connect', function () {
+        console.log('Kiosk connected to WebSocket server');
+        checkActiveSession().then(hasSession => {
+          if (hasSession) {
+            loadCatalog();
+            loadCart();
+          }
+        });
+      });
+
+      // ── Compare Drawer Logic ──
+      function updateCompareButtonVisibility() {
+        const completed = cart.filter(item => item.status === 'done');
+        if (completed.length >= 2) {
+          compareBtnRow.style.display = 'flex';
+        } else {
+          compareBtnRow.style.display = 'none';
+        }
+      }
+
+      btnCompare.addEventListener('click', function() {
+        populateCompareDropdowns();
+        compareBackdrop.style.display = 'block';
+        compareDrawer.style.display = 'flex';
+      });
+
+      function closeCompare() {
+        compareBackdrop.style.display = 'none';
+        compareDrawer.style.display = 'none';
+      }
+
+      btnCompareClose.addEventListener('click', closeCompare);
+      compareBackdrop.addEventListener('click', closeCompare);
+
+      function populateCompareDropdowns() {
+        const completed = cart.filter(item => item.status === 'done');
+        let optionsHtml = '';
+        completed.forEach(item => {
+          optionsHtml += `<option value="${item.id}">${escapeHtml(item.saree_name)} (${item.saree_code})</option>`;
+        });
+        
+        compareSelect1.innerHTML = optionsHtml;
+        compareSelect2.innerHTML = optionsHtml;
+
+        // Set default selections
+        if (completed.length >= 1) {
+          compareSelect1.value = completed[0].id;
+          updateCompareImage(1, completed[0].id);
+        }
+        if (completed.length >= 2) {
+          compareSelect2.value = completed[1].id;
+          updateCompareImage(2, completed[1].id);
+        } else if (completed.length >= 1) {
+          compareSelect2.value = completed[0].id;
+          updateCompareImage(2, completed[0].id);
+        }
+      }
+
+      function updateCompareImage(colNum, cartItemId) {
+        const item = cart.find(i => i.id === parseInt(cartItemId));
+        const imgEl = document.getElementById(`compare-img-${colNum}`);
+        if (item && item.result_url) {
+          imgEl.src = item.result_url + '?t=' + Date.now();
+        } else {
+          imgEl.src = '/static/placeholder.png';
+        }
+      }
+
+      compareSelect1.addEventListener('change', function() {
+        updateCompareImage(1, this.value);
+      });
+
+      compareSelect2.addEventListener('change', function() {
+        updateCompareImage(2, this.value);
+      });
+
+      // ── Summary QR Screen generation ──
+      function generateSummaryQR() {
+        const targetUrl = `${window.location.origin}/kiosk?session_id=${activeSession.id}`;
+        summaryQrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(targetUrl)}`;
+      }
+
+      btnSummaryRestart.addEventListener('click', function() {
+        if (!confirm('Are you sure you want to end this session and start fresh?')) return;
+        fetch('/admin/end-session', { method: 'POST' })
+          .then(res => {
+            if (res.status === 401) throw new Error('AUTH');
+            return fetch('/admin/new-session', { method: 'POST' });
+          })
+          .then(res => {
+            if (res.status === 401) throw new Error('AUTH');
+            return res.json();
+          })
+          .then(data => {
+            showNotification('New session started successfully!', 'success');
+            checkActiveSession();
+          })
+          .catch(err => {
+            if (err.message === 'AUTH') {
+              showNotification('Staff PIN required to restart the session.', 'error');
+              pinModalOverlay.style.display = 'flex';
+              pinDigits[0].focus();
+              return;
+            }
+            console.error('Error starting new session:', err);
+            showNotification('Failed to restart session', 'error');
+          });
+      });
+
+      btnSummaryBack.addEventListener('click', () => switchStep('catalog'));
+
+      // ── Staff Mode & Drawer Controls ──
+      const staffBackdrop = document.getElementById('staff-backdrop');
+      const staffDrawer = document.getElementById('staff-drawer');
+      const btnStaffToggle = document.getElementById('btn-staff-toggle');
+      const btnStaffClose = document.getElementById('btn-staff-close');
+      const pinModalOverlay = document.getElementById('pin-modal-overlay');
+      const btnPinSubmit = document.getElementById('btn-pin-submit');
+      const btnPinCancel = document.getElementById('btn-pin-cancel');
+      const pinDigits = document.querySelectorAll('.pin-digit');
+      const pinError = document.getElementById('pin-error');
+      
+      const btnStaffStart = document.getElementById('btn-staff-start');
+      const btnStaffEnd = document.getElementById('btn-staff-end');
+      const staffUploadForm = document.getElementById('staff-upload-form');
+      const staffCatalogList = document.getElementById('staff-catalog-list');
+
+      // Staff live camera capture DOM variables
+      const btnStaffSareeCamera = document.getElementById('btn-staff-saree-camera');
+      const staffSareeWebcamContainer = document.getElementById('staff-saree-webcam-container');
+      const staffSareeWebcamVideo = document.getElementById('staff-saree-webcam');
+      const btnStaffSareeCapture = document.getElementById('btn-staff-saree-capture');
+      const btnStaffSareeRecapture = document.getElementById('btn-staff-saree-recapture');
+      const staffSareeCanvas = document.getElementById('staff-saree-canvas');
+
+      function openStaffDrawer() {
+        if (!staffAuthenticated) {
+          pinModalOverlay.style.display = 'flex';
+          pinDigits[0].focus();
+          return;
+        }
+        staffBackdrop.style.display = 'block';
+        staffDrawer.style.display = 'flex';
+        loadStaffCatalog();
+      }
+
+      function closeStaffDrawer() {
+        stopStaffSareeWebcam();
+        staffBackdrop.style.display = 'none';
+        staffDrawer.style.display = 'none';
+      }
+
+      btnStaffToggle.addEventListener('click', openStaffDrawer);
+      btnStaffClose.addEventListener('click', closeStaffDrawer);
+      staffBackdrop.addEventListener('click', closeStaffDrawer);
+
+      // PIN digit input auto-focus handling
+      pinDigits.forEach(input => {
+        input.addEventListener('focus', function() {
+          this.value = '';
+          pinError.textContent = '';
+        });
+        
+        input.addEventListener('input', function() {
+          if (this.value.length === 1) {
+            const nextIdx = parseInt(this.getAttribute('data-idx')) + 1;
+            const nextInput = document.querySelector(`.pin-digit[data-idx="${nextIdx}"]`);
+            if (nextInput) {
+              nextInput.focus();
+            }
+          }
+        });
+        
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Backspace' && this.value.length === 0) {
+            const prevIdx = parseInt(this.getAttribute('data-idx')) - 1;
+            const prevInput = document.querySelector(`.pin-digit[data-idx="${prevIdx}"]`);
+            if (prevInput) {
+              prevInput.focus();
+            }
+          }
+        });
+
+        input.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            submitPIN();
+          }
+        });
+      });
+
+      function submitPIN() {
+        let pin = '';
+        pinDigits.forEach(input => pin += input.value);
+        // The PIN is verified server-side; the client never decides access.
+        fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pin })
+        })
+          .then(res => {
+            if (!res.ok) throw new Error('Invalid PIN');
+            return res.json();
+          })
+          .then(() => {
+            staffAuthenticated = true;
+            pinModalOverlay.style.display = 'none';
+            openStaffDrawer();
+          })
+          .catch(() => {
+            pinError.textContent = 'Invalid PIN. Please try again.';
+            pinDigits.forEach(input => input.value = '');
+            pinDigits[0].focus();
+          });
+      }
+
+      btnPinSubmit.addEventListener('click', submitPIN);
+      btnPinCancel.addEventListener('click', () => {
+        pinModalOverlay.style.display = 'none';
+        pinDigits.forEach(input => input.value = '');
+        pinError.textContent = '';
+      });
+
+      // Staff Saree Live Camera Stream Controls
+      function startStaffSareeWebcam() {
+        staffSareeWebcamContainer.style.display = 'block';
+        btnStaffSareeCapture.style.display = 'inline-flex';
+        btnStaffSareeRecapture.style.display = 'none';
+        staffSareeBlob = null;
+
+        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'environment' } })
+          .then(stream => {
+            staffSareeStream = stream;
+            staffSareeWebcamVideo.srcObject = stream;
+          })
+          .catch(err => {
+            console.error('Saree camera access denied:', err);
+            showNotification('Could not access saree webcam', 'error');
+            stopStaffSareeWebcam();
+          });
+      }
+
+      function stopStaffSareeWebcam() {
+        if (staffSareeStream) {
+          staffSareeStream.getTracks().forEach(track => track.stop());
+          staffSareeStream = null;
+        }
+        staffSareeWebcamVideo.srcObject = null;
+        staffSareeWebcamContainer.style.display = 'none';
+      }
+
+      btnStaffSareeCamera.addEventListener('click', function() {
+        if (staffSareeStream) {
+          stopStaffSareeWebcam();
+          btnStaffSareeCamera.textContent = '📷 Capture from Camera';
+        } else {
+          startStaffSareeWebcam();
+          btnStaffSareeCamera.textContent = 'Cancel Saree Camera';
+        }
+      });
+
+      btnStaffSareeCapture.addEventListener('click', function() {
+        if (!staffSareeStream) return;
+
+        staffSareeCanvas.width = staffSareeWebcamVideo.videoWidth || 640;
+        staffSareeCanvas.height = staffSareeWebcamVideo.videoHeight || 480;
+        const ctx = staffSareeCanvas.getContext('2d');
+        ctx.drawImage(staffSareeWebcamVideo, 0, 0, staffSareeCanvas.width, staffSareeCanvas.height);
+
+        staffSareeCanvas.toBlob(blob => {
+          staffSareeBlob = blob;
+          btnStaffSareeCapture.style.display = 'none';
+          btnStaffSareeRecapture.style.display = 'inline-flex';
+          staffSareeWebcamVideo.pause();
+        }, 'image/jpeg', 0.95);
+      });
+
+      btnStaffSareeRecapture.addEventListener('click', function() {
+        staffSareeBlob = null;
+        btnStaffSareeCapture.style.display = 'inline-flex';
+        btnStaffSareeRecapture.style.display = 'none';
+        staffSareeWebcamVideo.play();
+      });
+
+      // Staff catalog management
+      function loadStaffCatalog() {
+        fetch('/kiosk/sarees')
+          .then(res => res.json())
+          .then(data => {
+            sarees = data;
+            renderCatalog();
+            
+            if (!sarees.length) {
+              staffCatalogList.innerHTML = '<div class="staff-catalog-empty">No sarees in catalog</div>';
+              return;
+            }
+            
+            let html = '';
+            sarees.forEach(s => {
+              html += `
+                <div class="staff-catalog-item" id="staff-item-${s.id}">
+                  <img src="${escapeHtml(s.image_url || '/static/placeholder.png')}" alt="${escapeHtml(s.name)}">
+                  <div class="staff-catalog-item-info">
+                    <div class="staff-catalog-item-name">${escapeHtml(s.name)}</div>
+                    <div class="staff-catalog-item-code">${escapeHtml(s.code)}</div>
+                  </div>
+                  <button class="staff-catalog-item-delete" data-id="${s.id}" title="Delete Saree">🗑️</button>
+                </div>
+              `;
+            });
+            staffCatalogList.innerHTML = html;
+            
+            staffCatalogList.querySelectorAll('.staff-catalog-item-delete').forEach(btn => {
+              btn.addEventListener('click', function() {
+                const sareeId = parseInt(this.getAttribute('data-id'));
+                deleteSaree(sareeId);
+              });
+            });
+          })
+          .catch(err => {
+            console.error('Error loading staff catalog:', err);
+          });
+      }
+
+      function deleteSaree(sareeId) {
+        if (!confirm('Are you sure you want to delete this saree?')) {
+          return;
+        }
+        
+        fetch(`/admin/delete-saree/${sareeId}`, { method: 'DELETE' })
+          .then(res => {
+            if (!res.ok) throw new Error('Failed to delete saree');
+            return res.json();
+          })
+          .then(data => {
+            showNotification('Saree deleted successfully!', 'success');
+            loadStaffCatalog();
+            loadCart();
+          })
+          .catch(err => {
+            console.error('Error deleting saree:', err);
+            showNotification('Failed to delete saree', 'error');
+          });
+      }
+
+      // Saree Upload form handler (modified to handle file upload OR camera capture blob)
+      staffUploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const nameInput = document.getElementById('saree-name');
+        const codeInput = document.getElementById('saree-code');
+        const imgInput = document.getElementById('saree-image');
+        const uploadBtn = document.getElementById('btn-saree-upload');
+        
+        const fileSelected = imgInput.files[0];
+        const cameraCaptured = staffSareeBlob;
+
+        if (!nameInput.value || !codeInput.value) {
+          showNotification('Metadata fields are required', 'error');
+          return;
+        }
+        if (!fileSelected && !cameraCaptured) {
+          showNotification('Please choose a file or capture a photo from the camera', 'error');
+          return;
+        }
+        
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Uploading...';
+        
+        const formData = new FormData();
+        formData.append('name', nameInput.value.trim());
+        formData.append('code', codeInput.value.trim());
+        formData.append('image_type', document.getElementById('staff-saree-image-type').value);
+
+        if (fileSelected) {
+          formData.append('image', fileSelected);
+        } else if (cameraCaptured) {
+          formData.append('image', cameraCaptured, 'saree_capture.jpg');
+        }
+        
+        fetch('/admin/upload-saree', {
+          method: 'POST',
+          body: formData
+        })
+          .then(res => {
+            if (!res.ok) throw new Error('Upload failed');
+            return res.json();
+          })
+          .then(data => {
+            showNotification('Saree uploaded successfully!', 'success');
+            staffUploadForm.reset();
+            stopStaffSareeWebcam();
+            btnStaffSareeCamera.textContent = '📷 Capture from Camera';
+            loadStaffCatalog();
+          })
+          .catch(err => {
+            console.error('Error uploading saree:', err);
+            showNotification('Failed to upload saree', 'error');
+          })
+          .finally(() => {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = 'Upload Saree';
+          });
+      });
+
+      // Session start/end inside drawer
+      btnStaffStart.addEventListener('click', function() {
+        this.disabled = true;
+        fetch('/admin/new-session', { method: 'POST' })
+          .then(res => {
+            if (!res.ok) throw new Error('Failed to start session');
+            return res.json();
+          })
+          .then(data => {
+            showNotification('Session started successfully!', 'success');
+            checkActiveSession();
+          })
+          .catch(err => {
+            console.error('Error starting session:', err);
+            showNotification('Failed to start session', 'error');
+          })
+          .finally(() => {
+            this.disabled = false;
+          });
+      });
+
+      btnStaffEnd.addEventListener('click', function() {
+        if (!confirm('Are you sure you want to end the current customer session?')) {
+          return;
+        }
+        this.disabled = true;
+        fetch('/admin/end-session', { method: 'POST' })
+          .then(res => {
+            if (!res.ok) throw new Error('Failed to end session');
+            return res.json();
+          })
+          .then(data => {
+            showNotification('Session ended successfully!', 'success');
+            checkActiveSession();
+          })
+          .catch(err => {
+            console.error('Error ending session:', err);
+            showNotification('Failed to end session', 'error');
+          })
+          .finally(() => {
+            this.disabled = false;
+          });
+      });
+
+      // Restore staff auth from the server session cookie on page load.
+      fetch('/admin/auth-status')
+        .then(res => res.json())
+        .then(data => {
+          staffAuthenticated = !!data.authenticated;
+          // Check query parameter ?staff=true to auto-open
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('staff') === 'true') {
+            setTimeout(() => {
+              openStaffDrawer();
+            }, 500);
+          }
+        })
+        .catch(() => {});
+
+      // ── Lightbox Image Modal controls ──
+      function openLightbox(imgUrl, captionText) {
+        const lightboxModal = document.getElementById('lightbox-modal');
+        const lightboxImg = document.getElementById('lightbox-img');
+        const lightboxCaption = document.getElementById('lightbox-caption');
+        
+        lightboxImg.src = imgUrl;
+        lightboxCaption.textContent = captionText;
+        lightboxModal.style.display = 'flex';
+      }
+
+      function closeLightbox() {
+        const lightboxModal = document.getElementById('lightbox-modal');
+        lightboxModal.style.display = 'none';
+      }
+
+      document.getElementById('btn-lightbox-close').addEventListener('click', closeLightbox);
+      document.getElementById('lightbox-backdrop').addEventListener('click', closeLightbox);
+
+      document.getElementById('compare-img-1').addEventListener('click', function() {
+        const cartItemId = this.parentElement.querySelector('select').value;
+        const item = cart.find(i => i.id === parseInt(cartItemId));
+        if (item && item.result_url) {
+          openLightbox(item.result_url, `${item.saree_name} (${item.saree_code})`);
+        }
+      });
+
+      document.getElementById('compare-img-2').addEventListener('click', function() {
+        const cartItemId = this.parentElement.querySelector('select').value;
+        const item = cart.find(i => i.id === parseInt(cartItemId));
+        if (item && item.result_url) {
+          openLightbox(item.result_url, `${item.saree_name} (${item.saree_code})`);
+        }
+      });
+
+    })();
+  </script>
+</body>
+</html>

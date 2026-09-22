@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Saree Try-On — Big Screen Display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body class="display-page">
+
+  <div class="display-stage">
+    <!-- WELCOME SCREEN -->
+    <div id="welcome-screen" class="display-welcome">
+      <h1>✦ Saree Virtual Mirror</h1>
+      <p>Select a saree from the kiosk tablet to see it on your body instantly.</p>
+    </div>
+
+    <!-- LOADING SPINNER -->
+    <div id="loading-spinner" class="display-spinner" style="display: none;">
+      <div class="spinner-ring"></div>
+      <p id="spinner-text" class="spinner-text">Processing your virtual try-on...</p>
+      <p id="spinner-subtext" class="spinner-subtext" style="color: rgba(250, 246, 238, 0.88); font-family: 'Inter', system-ui, sans-serif; font-style: normal; font-size: 0.8em; letter-spacing: 0.3px; margin-top: 8px;">This usually takes 15–90s on the free service — hang tight ✦</p>
+    </div>
+
+    <!-- DISPLAY IMAGE -->
+    <img id="display-image" class="display-image" alt="Try-on result" style="display: none;">
+  </div>
+
+  <!-- BOTTOM LABEL BADGE -->
+  <div id="display-label" class="display-label"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const socket = window.io ? io() : { on: function () {} };
+      const img = document.getElementById("display-image");
+      const spinner = document.getElementById("loading-spinner");
+      const welcome = document.getElementById("welcome-screen");
+      const spinnerText = document.getElementById("spinner-text");
+      const spinnerSubtext = document.getElementById("spinner-subtext");
+      const label = document.getElementById("display-label");
+
+      let currentCartItemId = null;
+      let lastDisplayKey = "";
+      let loadingTimer = null;
+      // Remember the selected saree so result_ready can relabel without parsing text.
+      let currentSaree = { name: "", code: "", pleatStyle: null };
+
+      // Human-readable drape style, matching the kiosk toggle wording.
+      function pleatLabel(style) {
+        if (style === "single") return "Single Pleat";
+        if (style === "double") return "Double Pleat";
+        return "";
+      }
+
+      // Set the bottom label to "Name (CODE)" plus a pleat-style badge.
+      function setLabel(name, code, pleatStyle) {
+        label.textContent = name + " (" + code + ")";
+        const p = pleatLabel(pleatStyle);
+        if (p) {
+          const badge = document.createElement("span");
+          badge.textContent = p;
+          badge.style.cssText =
+            "display:inline-block; margin-left:12px; padding:3px 12px;" +
+            "border:1px solid rgba(212,175,55,0.75); border-radius:999px;" +
+            "color:#d4af37; font-family:'Inter',system-ui,sans-serif;" +
+            "font-size:0.62em; font-style:normal; letter-spacing:1.5px;" +
+            "text-transform:uppercase; vertical-align:middle;";
+          label.appendChild(document.createTextNode(" "));
+          label.appendChild(badge);
+        }
+      }
+
+      // ── Live elapsed-time counter, so a long free-service wait feels alive ──
+      function startLoadingTimer() {
+        stopLoadingTimer();
+        const started = Date.now();
+        const tick = () => {
+          const secs = Math.floor((Date.now() - started) / 1000);
+          let note = "This usually takes 15–90s on the free service — hang tight ✦";
+          if (secs >= 90) note = "Almost there — the free service is busy, thanks for your patience ✦";
+          spinnerSubtext.textContent = secs + "s elapsed · " + note;
+        };
+        tick();
+        loadingTimer = setInterval(tick, 1000);
+      }
+      function stopLoadingTimer() {
+        if (loadingTimer) { clearInterval(loadingTimer); loadingTimer = null; }
+      }
+
+      // ── Image Transition Handling ──
+      img.onload = function () {
+        img.style.display = "block";
+        spinner.style.display = "none";
+        
+        // Force reflow for transitions
+        void img.offsetWidth;
+        img.classList.add("visible");
+        
+        if (label.textContent) {
+          label.classList.add("visible");
+        }
+      };
+
+      img.onerror = function () {
+        console.error("Failed to load try-on image:", img.src);
+        showError("Failed to load try-on output image.");
+      };
+
+      function showWelcome() {
+        currentCartItemId = null;
+        stopLoadingTimer();
+        img.style.display = "none";
+        img.classList.remove("visible");
+        label.classList.remove("visible");
+        spinner.style.display = "none";
+        welcome.style.display = "";
+      }
+
+      function showLoading(sareeName) {
+        welcome.style.display = "none";
+        img.style.display = "none";
+        img.classList.remove("visible");
+        label.classList.remove("visible");
+
+        spinnerText.textContent = "Draping " + sareeName + " on your photo...";
+        spinner.style.display = "";
+        startLoadingTimer();
+      }
+
+      function showImage(url, name, code, pleatStyle) {
+        welcome.style.display = "none";
+        stopLoadingTimer();
+        spinner.style.display = "none";
+
+        // Fade out existing image/label
+        img.classList.remove("visible");
+        label.classList.remove("visible");
+
+        // Set content and trigger load
+        img.src = url + "?t=" + Date.now(); // cache bust
+        setLabel(name, code, pleatStyle);
+      }
+
+      function showError(msg) {
+        welcome.style.display = "none";
+        stopLoadingTimer();
+        img.style.display = "none";
+        img.classList.remove("visible");
+        spinner.style.display = "none";
+        
+        label.textContent = msg;
+        label.classList.add("visible");
+      }
+
+      // ── WebSocket Events ──
+      socket.on("show_saree", (data) => {
+        console.log("Socket: show_saree received", data);
+        currentCartItemId = data.cart_item_id;
+        currentSaree = { name: data.saree_name, code: data.saree_code, pleatStyle: data.pleat_style };
+
+        if (data.status === "done" && data.result_url) {
+          showImage(data.result_url, data.saree_name, data.saree_code, data.pleat_style);
+        } else if (data.status === "error") {
+          showError("Error processing try-on for " + data.saree_name);
+        } else {
+          showLoading(data.saree_name);
+        }
+      });
+
+      socket.on("result_ready", (data) => {
+        console.log("Socket: result_ready received", data);
+
+        if (data.cart_item_id === currentCartItemId) {
+          if (data.status === "done" && data.result_url) {
+            // Use the remembered saree so the pleat badge survives the relabel.
+            showImage(data.result_url, currentSaree.name || "Selected Saree",
+                      currentSaree.code || "", currentSaree.pleatStyle);
+          } else if (data.status === "error") {
+            showError("Try-on processing failed.");
+          }
+        }
+      });
+
+      socket.on("session_started", (data) => {
+        console.log("Socket: session_started received. Resetting display.");
+        showWelcome();
+      });
+
+      socket.on("session_ended", (data) => {
+        console.log("Socket: session_ended received. Resetting display.");
+        showWelcome();
+      });
+
+      socket.on("connect", () => {
+        console.log("Display connected to WebSocket server");
+      });
+
+      function applyDisplayData(data) {
+        if (!data.selected) {
+          if (currentCartItemId !== null) showWelcome();
+          return;
+        }
+
+        const displayKey = [
+          data.cart_item_id,
+          data.status,
+          data.result_url || ""
+        ].join("|");
+
+        if (displayKey === lastDisplayKey) return;
+        lastDisplayKey = displayKey;
+        currentCartItemId = data.cart_item_id;
+        currentSaree = { name: data.saree_name, code: data.saree_code, pleatStyle: data.pleat_style };
+
+        if (data.status === "done" && data.result_url) {
+          showImage(data.result_url, data.saree_name, data.saree_code, data.pleat_style);
+        } else if (data.status === "error") {
+          showError("Error processing try-on for " + data.saree_name);
+        } else {
+          showLoading(data.saree_name);
+        }
+      }
+
+      function pollCurrentSelection() {
+        fetch("/display/current")
+          .then(function (res) { return res.json(); })
+          .then(applyDisplayData)
+          .catch(function (err) {
+            console.error("Display polling failed:", err);
+          });
+      }
+
+      pollCurrentSelection();
+      setInterval(pollCurrentSelection, 1000);
+
+    })();
+  </script>
+</body>
+</html>
