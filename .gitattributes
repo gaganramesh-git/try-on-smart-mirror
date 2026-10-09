@@ -1,0 +1,7 @@
+# Language stats: this is a Python (Flask) backend. The HTML files are
+# server-rendered Jinja templates, not a standalone frontend, so they are
+# excluded from GitHub's language detection to reflect the real stack.
+templates/*.html linguist-detectable=false
+
+# Treat the catalogue/demo assets as non-code.
+static/sarees/* linguist-vendored
