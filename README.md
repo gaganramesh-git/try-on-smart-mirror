@@ -1,5 +1,7 @@
 # Try-On — Saree Virtual Try-On Smart Mirror
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/gaganramesh-git/try-on-smart-mirror)
+
 Photograph a customer **once**, then let her see herself in every saree in the
 shop — including the ones that exist only as folded cloth — on a full-height
 display, with her choice of drape.
@@ -59,6 +61,21 @@ Backends are swappable by configuration; see `.env.example`.
 - **Storage:** SQLite
 - **Frontend:** server-rendered HTML/CSS/JS (no build step)
 - **Image processing:** Pillow
+
+---
+
+## Run it in GitHub Codespaces
+
+Click the badge above, or **Code → Codespaces → Create codespace on main**.
+
+- Dependencies install automatically and the server starts on port **5001**.
+- A random staff PIN is generated on first start and printed in the setup
+  terminal (it is also stored in `.env`).
+- Open the forwarded port, then add `/admin`, `/kiosk` or `/display`.
+- Codespaces serves forwarded ports over HTTPS, so the in-browser camera works
+  without any extra setup.
+- Add `FAL_KEY` (or other keys) as a [Codespaces secret](https://github.com/settings/codespaces)
+  rather than committing them. Keep the port **private** unless you are demoing.
 
 ---
 
